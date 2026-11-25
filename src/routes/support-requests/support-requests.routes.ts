@@ -5,6 +5,7 @@ import {
 	createSupportRequest,
 	getSupportRequestById,
 	listSupportRequests,
+	retrySupportRequest,
 } from './support-requests.services'
 
 export const supportRequestsRouter = new Hono()
@@ -55,4 +56,27 @@ supportRequestsRouter.get('/:id', async (c) => {
 	}
 
 	return c.json(supportRequest, 200)
+})
+
+supportRequestsRouter.post('/:id/retry', async (c) => {
+	const params = supportRequestParamsSchema.safeParse(c.req.param())
+
+	if (!params.success) {
+		throw new HTTPException(400, {
+			message: 'ID must be a valid UUID',
+			cause: params.error,
+		})
+	}
+
+	const result = await retrySupportRequest(params.data.id.toLowerCase())
+
+	if (result.kind === 'updated') {
+		return c.json(result.supportRequest, 200)
+	}
+
+	if (result.kind === 'notFound') {
+		throw new HTTPException(404, { message: 'Support request not found' })
+	}
+
+	throw new HTTPException(409, { message: 'Only failed support requests can be retried' })
 })
