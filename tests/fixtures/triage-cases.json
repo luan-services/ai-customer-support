@@ -1,0 +1,257 @@
+{
+	"description": "Mensagens fictícias para avaliação manual da triagem. Compare a categoria e o departamento exatamente. Compare o sentido do resumo, que pode variar na redação.",
+	"groups": [
+		{
+			"expectedCategory": "DELIVERY",
+			"expectedDepartment": "LOGISTICS",
+			"cases": [
+				{
+					"id": "delivery-1",
+					"message": "oi, era pra chegar ontem e até agora nada. vcs conseguem ver onde foi parar?",
+					"expectedSummary": "O pedido está atrasado e o cliente quer saber onde está."
+				},
+				{
+					"id": "delivery-2",
+					"message": "Aqui aparece entregue desde as 14h, mas eu fiquei em casa a tarde toda e ninguém chamou.",
+					"expectedSummary": "O rastreio indica entrega, mas o cliente não recebeu o pedido."
+				},
+				{
+					"id": "delivery-3",
+					"message": "O código que veio no email dá inválido nos Correios. tem outro?",
+					"expectedSummary": "O código de rastreio informado não funciona."
+				},
+				{
+					"id": "delivery-4",
+					"message": "faz 4 dias que tá em saiu pra entrega kkk é normal isso?",
+					"expectedSummary": "O rastreio está parado em saída para entrega há quatro dias."
+				},
+				{
+					"id": "delivery-5",
+					"message": "Chegou a calça, mas a camiseta que tava no mesmo pedido ainda não veio. vai em outro pacote?",
+					"expectedSummary": "O cliente recebeu apenas parte do pedido e quer saber sobre o restante."
+				},
+				{
+					"id": "delivery-6",
+					"message": "se não chegar até sexta vou ter que cancelar. vc consegue confirmar a previsão?",
+					"expectedSummary": "O cliente quer confirmar a previsão de entrega antes de decidir se cancela."
+				}
+			]
+		},
+		{
+			"expectedCategory": "EXCHANGE_OR_RETURN",
+			"expectedDepartment": "AFTER_SALES",
+			"cases": [
+				{
+					"id": "exchange-or-return-1",
+					"message": "oii pedi M mas queria um G, como faço pra trocar?",
+					"expectedSummary": "O cliente quer trocar uma peça M por G."
+				},
+				{
+					"id": "exchange-or-return-2",
+					"message": "Comprei duas camisas pra provar em casa, vou ficar só com uma. Como devolvo a outra?",
+					"expectedSummary": "O cliente quer devolver uma das duas camisas."
+				},
+				{
+					"id": "exchange-or-return-3",
+					"message": "Ganhei essa jaqueta de presente, tá com a etiqueta ainda. posso trocar por outra cor?",
+					"expectedSummary": "O cliente quer trocar a cor de uma jaqueta recebida de presente."
+				},
+				{
+					"id": "exchange-or-return-4",
+					"message": "Já mandei a peça de volta faz uma semana. vocês receberam? ainda quero a troca pelo 38.",
+					"expectedSummary": "O cliente quer confirmar se a devolução para troca pelo tamanho 38 foi recebida."
+				},
+				{
+					"id": "exchange-or-return-5",
+					"message": "Me arrependi da compra e queria devolver. É só levar na agência ou tem que pegar um código antes?",
+					"expectedSummary": "O cliente quer devolver a compra e pergunta sobre o código de postagem."
+				},
+				{
+					"id": "exchange-or-return-6",
+					"message": "O vestido ficou grande em mim. é o tamanho que pedi mesmo, só queria saber se rola trocar.",
+					"expectedSummary": "O tamanho recebido foi o pedido, mas o cliente quer trocar porque ficou grande."
+				}
+			]
+		},
+		{
+			"expectedCategory": "BILLING",
+			"expectedDepartment": "FINANCE",
+			"cases": [
+				{
+					"id": "billing-1",
+					"message": "gente, apareceu duas vezes na fatura a mesma compra. conseguem olhar?",
+					"expectedSummary": "O cliente relata uma possível cobrança duplicada no cartão."
+				},
+				{
+					"id": "billing-2",
+					"message": "Paguei no Pix ontem à noite e ainda consta aguardando pagamento.",
+					"expectedSummary": "O pagamento via Pix ainda não foi reconhecido."
+				},
+				{
+					"id": "billing-3",
+					"message": "Já aprovaram minha devolução mas nada do estorno no cartão. tem prazo?",
+					"expectedSummary": "A devolução foi aprovada e o cliente quer saber o prazo do estorno."
+				},
+				{
+					"id": "billing-4",
+					"message": "fiz em 3x mas veio tudo numa parcela só, como assim?",
+					"expectedSummary": "O cliente esperava três parcelas e recebeu uma cobrança única."
+				},
+				{
+					"id": "billing-5",
+					"message": "O cupom entrou no carrinho, aí no valor cobrado sumiu o desconto.",
+					"expectedSummary": "O desconto apareceu no carrinho, mas não foi aplicado no valor cobrado."
+				},
+				{
+					"id": "billing-6",
+					"message": "Meu cartão recusou a compra, mas chegou notificação de débito. isso vai ser cobrado?",
+					"expectedSummary": "O cliente quer verificar um possível débito após a recusa do cartão."
+				}
+			]
+		},
+		{
+			"expectedCategory": "ORDER_CHANGE_OR_CANCELLATION",
+			"expectedDepartment": "CUSTOMER_SUPPORT",
+			"cases": [
+				{
+					"id": "order-change-or-cancellation-1",
+					"message": "fiz o pedido agora e botei o número da casa errado, dá pra corrigir antes de enviarem?",
+					"expectedSummary": "O cliente quer corrigir o número do endereço antes do envio."
+				},
+				{
+					"id": "order-change-or-cancellation-2",
+					"message": "Cancela pra mim por favor, comprei duas vezes sem querer. O segundo pedido ainda tá preparando.",
+					"expectedSummary": "O cliente quer cancelar o segundo pedido, feito por engano."
+				},
+				{
+					"id": "order-change-or-cancellation-3",
+					"message": "percebi que escolhi P no checkout. ainda não enviou, consegue mudar pra M?",
+					"expectedSummary": "O cliente quer alterar o tamanho de um pedido ainda não enviado."
+				},
+				{
+					"id": "order-change-or-cancellation-4",
+					"message": "Tem como tirar só a meia do pedido e manter a calça? Fechei a compra agora há pouco.",
+					"expectedSummary": "O cliente quer remover apenas a meia de um pedido recém-fechado."
+				},
+				{
+					"id": "order-change-or-cancellation-5",
+					"message": "Usei meu email antigo na hora da compra. Dá pra atualizar pro que eu uso hoje?",
+					"expectedSummary": "O cliente quer atualizar o e-mail associado ao pedido."
+				},
+				{
+					"id": "order-change-or-cancellation-6",
+					"message": "Mudei de ideia. Eu quero cancelar o pedido todo antes que saia, como faço?",
+					"expectedSummary": "O cliente quer cancelar o pedido inteiro antes do envio."
+				}
+			]
+		},
+		{
+			"expectedCategory": "PRODUCT_NOT_AS_DESCRIBED",
+			"expectedDepartment": "AFTER_SALES",
+			"cases": [
+				{
+					"id": "product-not-as-described-1",
+					"message": "No anúncio tava 100% algodão, mas na etiqueta da blusa tá escrito poliéster.",
+					"expectedSummary": "A composição na etiqueta não corresponde à anunciada."
+				},
+				{
+					"id": "product-not-as-described-2",
+					"message": "Pedi o moletom preto e chegou um verde, até a nota diz preto.",
+					"expectedSummary": "O moletom recebido é verde, embora o pedido indique preto."
+				},
+				{
+					"id": "product-not-as-described-3",
+					"message": "A foto mostrava bolso dos dois lados. o que recebi não tem bolso nenhum.",
+					"expectedSummary": "A peça recebida não tem os bolsos mostrados no anúncio."
+				},
+				{
+					"id": "product-not-as-described-4",
+					"message": "Quero devolver esse vestido. Na descrição dizia que tinha forro, mas esse aqui veio sem.",
+					"expectedSummary": "O cliente quer devolver o vestido porque ele não tem o forro anunciado."
+				},
+				{
+					"id": "product-not-as-described-5",
+					"message": "Pedi uma calça e veio uma saia com o código da calça na embalagem.",
+					"expectedSummary": "O cliente recebeu uma saia no lugar da calça comprada."
+				},
+				{
+					"id": "product-not-as-described-6",
+					"message": "A tabela dizia 70 cm de comprimento e medi 58. Não tô falando do caimento, a medida tá bem diferente.",
+					"expectedSummary": "O comprimento medido diverge da tabela do produto."
+				}
+			]
+		},
+		{
+			"expectedCategory": "DAMAGED_PRODUCT",
+			"expectedDepartment": "AFTER_SALES",
+			"cases": [
+				{
+					"id": "damaged-product-1",
+					"message": "oi minha blusa chegou rasgada embaixo do braço, abri o pacote agorinha",
+					"expectedSummary": "A blusa chegou com um rasgo embaixo do braço."
+				},
+				{
+					"id": "damaged-product-2",
+					"message": "quero devolver pq o vestido veio manchado na frente. nem cheguei a provar.",
+					"expectedSummary": "O cliente quer devolver o vestido porque ele chegou manchado."
+				},
+				{
+					"id": "damaged-product-3",
+					"message": "A calça veio certa, mas o zíper tá quebrado. Dá pra trocar?",
+					"expectedSummary": "A calça chegou com o zíper quebrado e o cliente quer trocar."
+				},
+				{
+					"id": "damaged-product-4",
+					"message": "a caixa tava amassada e o fecho da bolsa veio torto, não fecha",
+					"expectedSummary": "A bolsa chegou com o fecho danificado e não fecha."
+				},
+				{
+					"id": "damaged-product-5",
+					"message": "Recebi hoje e um dos botões veio solto dentro do saquinho. é camisa nova :(",
+					"expectedSummary": "A camisa chegou com um botão solto dentro da embalagem."
+				},
+				{
+					"id": "damaged-product-6",
+					"message": "Tirando da embalagem vi que a costura da manga já tava aberta. consigo uma peça sem defeito?",
+					"expectedSummary": "A peça chegou com a costura da manga aberta."
+				}
+			]
+		},
+		{
+			"expectedCategory": "OTHER",
+			"expectedDepartment": "CUSTOMER_SUPPORT",
+			"cases": [
+				{
+					"id": "other-1",
+					"message": "oi vcs têm loja física em Campinas ou é só online?",
+					"expectedSummary": "O cliente pergunta se há loja física em Campinas."
+				},
+				{
+					"id": "other-2",
+					"message": "Vocês vão repor aquele moletom lilás no G? aqui só aparece P.",
+					"expectedSummary": "O cliente pergunta sobre reposição do moletom lilás no tamanho G."
+				},
+				{
+					"id": "other-3",
+					"message": "Sou fotógrafa, com quem falo sobre fazer um ensaio pra marca?",
+					"expectedSummary": "A pessoa quer oferecer uma parceria de fotografia."
+				},
+				{
+					"id": "other-4",
+					"message": "Queria parar de receber os emails de promoção, mas não achei onde cancela.",
+					"expectedSummary": "O cliente quer cancelar o recebimento de e-mails promocionais."
+				},
+				{
+					"id": "other-5",
+					"message": "Tem vaga aberta pra trabalhar com vocês? posso mandar currículo por aqui?",
+					"expectedSummary": "A pessoa pergunta sobre vagas e envio de currículo."
+				},
+				{
+					"id": "other-6",
+					"message": "Só passei pra dizer que adorei a embalagem, deu pra mandar direto de presente :)",
+					"expectedSummary": "O cliente elogia a embalagem."
+				}
+			]
+		}
+	]
+}
