@@ -18,13 +18,30 @@ enum SupportRequestStatus {
   FAILED
 }
 
+enum TriageCategory {
+	DELIVERY
+	EXCHANGE_OR_RETURN
+	BILLING
+	ORDER_CHANGE_OR_CANCELLATION
+	PRODUCT_NOT_AS_DESCRIBED
+	DAMAGED_PRODUCT
+	OTHER
+}
+
+enum Department {
+	LOGISTICS
+	AFTER_SALES
+	FINANCE
+	CUSTOMER_SUPPORT
+}
+
 model SupportRequest {
-  id         String               @id @default(uuid())
-  message    String
-  status     SupportRequestStatus @default(PENDING)
-  category   String?
-  summary    String?
-  department String?
-  createdAt  DateTime             @default(now())
-  updatedAt  DateTime             @updatedAt
+	id         String               @id @default(uuid())
+	message    String
+	status     SupportRequestStatus @default(PENDING)
+	category   TriageCategory?
+	summary    String?
+	department Department?
+	createdAt  DateTime             @default(now())
+	updatedAt  DateTime             @updatedAt
 }
