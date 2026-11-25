@@ -11,3 +11,20 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+enum SupportRequestStatus {
+  PENDING
+  ANALYZED
+  FAILED
+}
+
+model SupportRequest {
+  id         String               @id @default(uuid())
+  message    String
+  status     SupportRequestStatus @default(PENDING)
+  category   String?
+  summary    String?
+  department String?
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+}
