@@ -1,6 +1,6 @@
 import type { z } from 'zod'
-import { SupportRequestStatus } from '../../../generated/prisma/enums'
-import { analyzeSupportMessage } from '../../lib/gemini'
+import { OrderStatus, SupportRequestStatus, TriageCategory } from '../../../generated/prisma/enums'
+import { analyzeSupportMessage, draftDeliveryReply } from '../../lib/gemini'
 import { prisma } from '../../lib/prisma'
 import type { createSupportRequestSchema } from './support-requests.schemas'
 import { departmentByCategory } from './support-requests.triage'
@@ -56,6 +56,34 @@ export const listSupportRequests = () => {
 
 export const getSupportRequestById = (id: string) => {
 	return prisma.supportRequest.findUnique({ where: { id } })
+}
+
+export const draftSupportRequestReply = async (id: string) => {
+	const supportRequest = await prisma.supportRequest.findUnique({
+		where: { id },
+		select: {
+			message: true,
+			status: true,
+			category: true,
+			order: { select: { number: true, status: true, estimatedDelivery: true } },
+		},
+	})
+
+	if (!supportRequest) {
+		return { kind: 'notFound' } as const
+	}
+
+	const { message, status, category, order } = supportRequest
+	if (status !== SupportRequestStatus.ANALYZED || category !== TriageCategory.DELIVERY || !order) {
+		return { kind: 'ineligible' } as const
+	}
+
+	if (order.status === OrderStatus.DELIVERED) {
+		return { kind: 'needsReview' } as const
+	}
+
+	const reply = await draftDeliveryReply(message, order)
+	return { kind: 'drafted', reply } as const
 }
 
 export const retrySupportRequest = async (id: string) => {

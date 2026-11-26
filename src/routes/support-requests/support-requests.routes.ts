@@ -3,6 +3,7 @@ import { HTTPException } from 'hono/http-exception'
 import { createSupportRequestSchema, supportRequestParamsSchema } from './support-requests.schemas'
 import {
 	createSupportRequest,
+	draftSupportRequestReply,
 	getSupportRequestById,
 	listSupportRequests,
 	retrySupportRequest,
@@ -60,6 +61,33 @@ supportRequestsRouter.get('/:id', async (c) => {
 	}
 
 	return c.json(supportRequest, 200)
+})
+
+supportRequestsRouter.post('/:id/draft-reply', async (c) => {
+	const params = supportRequestParamsSchema.safeParse(c.req.param())
+
+	if (!params.success) {
+		throw new HTTPException(400, {
+			message: 'ID must be a valid UUID',
+			cause: params.error,
+		})
+	}
+
+	const result = await draftSupportRequestReply(params.data.id.toLowerCase())
+
+	if (result.kind === 'notFound') {
+		throw new HTTPException(404, { message: 'Support request not found' })
+	}
+
+	if (result.kind === 'ineligible') {
+		throw new HTTPException(409, { message: 'A draft requires an analyzed delivery request with a linked order' })
+	}
+
+	if (result.kind === 'needsReview') {
+		return c.json({ status: 'NEEDS_REVIEW', reason: 'ORDER_MARKED_DELIVERED' }, 200)
+	}
+
+	return c.json({ status: 'DRAFTED', reply: result.reply }, 200)
 })
 
 supportRequestsRouter.post('/:id/retry', async (c) => {
