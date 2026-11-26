@@ -35,6 +35,31 @@ enum Department {
 	CUSTOMER_SUPPORT
 }
 
+enum OrderStatus {
+	PROCESSING
+	IN_TRANSIT
+	DELIVERED
+}
+
+model User {
+	id     String  @id @default(uuid())
+	name   String
+	orders Order[]
+}
+
+model Order {
+	id                String           @id @default(uuid())
+	number            String           @unique
+	status            OrderStatus      @default(PROCESSING)
+	estimatedDelivery DateTime?        @db.Date
+	createdAt         DateTime         @default(now())
+	userId            String
+	user              User             @relation(fields: [userId], references: [id])
+	supportRequests   SupportRequest[]
+
+	@@index([userId])
+}
+
 model SupportRequest {
 	id         String               @id @default(uuid())
 	message    String
@@ -44,4 +69,8 @@ model SupportRequest {
 	department Department?
 	createdAt  DateTime             @default(now())
 	updatedAt  DateTime             @updatedAt
+	orderId    String?
+	order      Order?               @relation(fields: [orderId], references: [id])
+
+	@@index([orderId])
 }
