@@ -23,12 +23,16 @@ supportRequestsRouter.post('/', async (c) => {
 
 	if (!result.success) {
 		throw new HTTPException(400, {
-			message: 'Message must be a non-empty string',
+			message: 'Invalid request body',
 			cause: result.error,
 		})
 	}
 
-	const supportRequest = await createSupportRequest(result.data.message)
+	const supportRequest = await createSupportRequest(result.data)
+
+	if (!supportRequest) {
+		throw new HTTPException(404, { message: 'Order not found for this user' })
+	}
 
 	return c.json(supportRequest, 201)
 })

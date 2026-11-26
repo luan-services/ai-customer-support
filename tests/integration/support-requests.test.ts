@@ -6,8 +6,21 @@ import fixture from '../fixtures/triage-cases.json'
 
 const originalApiKey = process.env.GEMINI_API_KEY
 const createdRequestSchema = z.object({ id: z.uuid() })
+const userId = crypto.randomUUID()
+const otherUserId = crypto.randomUUID()
+const orderId = crypto.randomUUID()
 
-beforeAll(() => {
+beforeAll(async () => {
+	await prisma.$transaction([
+		prisma.user.create({
+			data: {
+				id: userId,
+				name: 'Integration test customer',
+				orders: { create: { id: orderId, number: `TEST-${orderId}` } },
+			},
+		}),
+		prisma.user.create({ data: { id: otherUserId, name: 'Other integration test customer' } }),
+	])
 	process.env.GEMINI_API_KEY = 'integration-test-key'
 })
 
@@ -18,7 +31,34 @@ afterAll(async () => {
 		process.env.GEMINI_API_KEY = originalApiKey
 	}
 
-	await prisma.$disconnect()
+	try {
+		await prisma.$transaction([
+			prisma.supportRequest.deleteMany({ where: { orderId } }),
+			prisma.order.deleteMany({ where: { id: orderId, userId } }),
+			prisma.user.deleteMany({ where: { id: { in: [userId, otherUserId] } } }),
+		])
+	} finally {
+		await prisma.$disconnect()
+	}
+})
+
+test('rejects an order belonging to another user before saving or analyzing the message', async () => {
+	const geminiFetch = spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Unexpected Gemini request'))
+	const message = 'Quero saber onde está meu pedido.'
+
+	try {
+		const response = await app.request('/support-requests', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ userId: otherUserId, orderId, message }),
+		})
+
+		expect(response.status).toBe(404)
+		expect(geminiFetch).toHaveBeenCalledTimes(0)
+		expect(await prisma.supportRequest.count({ where: { orderId, message } })).toBe(0)
+	} finally {
+		geminiFetch.mockRestore()
+	}
 })
 
 const cases = fixture.groups.flatMap(({ expectedCategory, expectedDepartment, cases }) =>
@@ -42,16 +82,15 @@ for (const entry of cases) {
 		}
 		geminiFetch.mockResolvedValueOnce(geminiResponse)
 
-		let requestId: string | undefined
 		try {
 			const created = await app.request('/support-requests', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ message: entry.message }),
+				body: JSON.stringify({ userId, orderId, message: entry.message }),
 			})
 			expect(created.status).toBe(201)
 			const createdBody: unknown = await created.json()
-			requestId = createdRequestSchema.parse(createdBody).id
+			const requestId = createdRequestSchema.parse(createdBody).id
 
 			let result: unknown = createdBody
 			if (shouldRetry) {
@@ -66,6 +105,7 @@ for (const entry of cases) {
 
 			const expected = {
 				id: requestId,
+				orderId,
 				message: entry.message,
 				status: 'ANALYZED',
 				department: entry.expectedDepartment,
@@ -76,9 +116,6 @@ for (const entry of cases) {
 			expect(geminiFetch).toHaveBeenCalledTimes(shouldRetry ? 2 : 1)
 		} finally {
 			geminiFetch.mockRestore()
-			if (requestId) {
-				await prisma.supportRequest.deleteMany({ where: { id: requestId } })
-			}
 		}
 	})
 }

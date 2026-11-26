@@ -1,6 +1,8 @@
+import type { z } from 'zod'
 import { SupportRequestStatus } from '../../../generated/prisma/enums'
 import { analyzeSupportMessage } from '../../lib/gemini'
 import { prisma } from '../../lib/prisma'
+import type { createSupportRequestSchema } from './support-requests.schemas'
 import { departmentByCategory } from './support-requests.triage'
 
 const analyzeAndUpdateSupportRequest = async (id: string, message: string) => {
@@ -29,9 +31,18 @@ const analyzeAndUpdateSupportRequest = async (id: string, message: string) => {
 	})
 }
 
-export const createSupportRequest = async (message: string) => {
+export const createSupportRequest = async ({ userId, orderId, message }: z.infer<typeof createSupportRequestSchema>) => {
+	const order = await prisma.order.findUnique({
+		where: { id: orderId, userId },
+		select: { id: true },
+	})
+
+	if (!order) {
+		return null
+	}
+
 	const supportRequest = await prisma.supportRequest.create({
-		data: { message },
+		data: { message, orderId: order.id },
 	})
 
 	return analyzeAndUpdateSupportRequest(supportRequest.id, supportRequest.message)
