@@ -18,6 +18,11 @@ enum SupportRequestStatus {
   FAILED
 }
 
+enum SupportReplyStatus {
+	DRAFTED
+	NEEDS_REVIEW
+}
+
 enum TriageCategory {
 	DELIVERY
 	EXCHANGE_OR_RETURN
@@ -61,16 +66,19 @@ model Order {
 }
 
 model SupportRequest {
-	id         String               @id @default(uuid())
-	message    String
-	status     SupportRequestStatus @default(PENDING)
-	category   TriageCategory?
-	summary    String?
-	department Department?
-	createdAt  DateTime             @default(now())
-	updatedAt  DateTime             @updatedAt
-	orderId    String?
-	order      Order?               @relation(fields: [orderId], references: [id])
+	id           String               @id @default(uuid())
+	message      String
+	status       SupportRequestStatus @default(PENDING)
+	category     TriageCategory?
+	summary      String?
+	department   Department?
+	reply        String?
+	replyStatus  SupportReplyStatus?
+	reviewReason String?
+	createdAt    DateTime             @default(now())
+	updatedAt    DateTime             @updatedAt
+	orderId      String?
+	order        Order?               @relation(fields: [orderId], references: [id])
 
 	@@index([orderId])
 }

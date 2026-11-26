@@ -84,7 +84,11 @@ supportRequestsRouter.post('/:id/draft-reply', async (c) => {
 	}
 
 	if (result.kind === 'needsReview') {
-		return c.json({ status: 'NEEDS_REVIEW', reason: 'ORDER_MARKED_DELIVERED' }, 200)
+		return c.json({
+			status: 'NEEDS_REVIEW',
+			reason: 'ORDER_MARKED_DELIVERED',
+			reply: 'Seu pedido consta como entregue. Se você não recebeu a encomenda, precisamos verificar o que aconteceu com a entrega.',
+		}, 200)
 	}
 
 	return c.json({ status: 'DRAFTED', reply: result.reply }, 200)
