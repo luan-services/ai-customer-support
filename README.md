@@ -1,74 +1,107 @@
 # AI Customer Support
 
-MVP de um backend de atendimento para uma loja virtual de roupas. A API salva a mensagem original no PostgreSQL, usa a API do Gemini para classificar e resumir a solicitação e atribui o departamento responsável com base em um mapeamento fixo. 
+MVP de atendimento para uma loja virtual de roupas. A API valida o vínculo entre o usuário e o pedido, salva a mensagem no PostgreSQL e usa o Gemini para classificar e resumir a solicitação. Um mapeamento fixo atribui o departamento responsável.
 
-É possível listar solicitações, consultar seus detalhes e tentar novamente quando a análise falha.
+**Primeira versão funcional de `RESPOSTA`**. O cliente pode iniciar uma conversa sobre um pedido, receber respostas automáticas com o contexto da entrega e ter o caso sinalizado para atendimento humano. No momento só funciona para mensagens categorizadas
+como problema de entrega (`DELIVERY`).
 
-A visão para as próximas versões é que a IA possa responder diretamente ao cliente e encaminhar a conversa para um atendente humano via websocket quando necessário. O projeto também vai receber uma interface visual para acompanhar os atendimentos. Nesta versão, a API cobre o registro e a triagem das solicitações.
+Interface, notificações e chat em tempo real com atendente ficam para uma versão futura.
 
-## Tecnologias
+## Fluxo de entrega
 
-Bun, TypeScript, Hono, Zod, Prisma ORM 7, PostgreSQL e Gemini 3.1 Flash-Lite.
+1. O cliente escolhe um pedido e envia a primeira mensagem. O backend confere o vínculo entre `userId` e `orderId` e salva a fala antes de chamar o Gemini.
+2. O Gemini classifica a solicitação. Em `DELIVERY`, o backend usa o histórico e os dados do pedido para gerar e salvar a primeira resposta no mesmo `POST`. As demais categorias ficam registradas e classificadas.
+3. As próximas falas vão para `/messages`. O Gemini pode responder com os dados disponíveis, fazer uma pergunta útil ou recomendar revisão humana.
+4. Se o cliente pedir um atendente, se o caso exigir investigação ou se chegar uma nova fala depois de quatro respostas automáticas, o backend registra `NEEDS_REVIEW`, salva um aviso ao cliente e interrompe as respostas automáticas. As novas falas continuam no histórico.
+
+Um pedido que consta como entregue pode receber uma resposta normal. Se o cliente disser que não recebeu, a IA pode perguntar se alguém recebeu por ele e sinalizar revisão quando o histórico mostrar que é preciso investigar.
+
+Use `GET /support-requests?replyStatus=NEEDS_REVIEW` para consultar a fila. O campo `reviewReason` identifica `HUMAN_REQUESTED`, `INVESTIGATION_REQUIRED` ou `TURN_LIMIT_REACHED` no fluxo atual.
 
 ## Rodar localmente
 
-Você precisa do Bun, de um PostgreSQL acessível e de uma chave da API do Gemini, ou outra LLM.
+O projeto usa Bun, TypeScript, Hono, Zod, Prisma ORM 7, PostgreSQL e Gemini 3.1 Flash-Lite. Os testes locais usam usuários e pedidos fictícios. O `userId` enviado na requisição simula a identidade do cliente.
 
-Crie um `.env` na raiz do projeto com as variáveis abaixo, é necessário ter uma connection string de um banco de dados postgre local ou hospedado em algum serviço (como supabase).
+Crie um `.env` na raiz com a URL do seu PostgreSQL e a chave da API do Gemini.
 
 ```dotenv
 DATABASE_URL="postgresql://support_app:SUA_SENHA@127.0.0.1:5433/customer_support"
 GEMINI_API_KEY="SUA_CHAVE"
 ```
 
-Na raiz do projeto, instale as dependências, aplique as migrations, gere o Prisma Client e inicie a API.
+Com o banco rodando, instale as dependências, aplique as migrations, gere o Prisma Client e carregue os dados fictícios com a seed disponível.
 
 ```powershell
 bun install
 bunx --bun prisma migrate deploy --config prisma7.config.ts
 bunx --bun prisma generate --config prisma7.config.ts
+bun run prisma/seed.ts
 bun run dev
 ```
 
-A API fica em `http://localhost:3000`. O servidor verifica a conexão com o PostgreSQL na inicialização.
+A API fica em `http://localhost:3000`.
 
 ## Rotas
 
-| Método | Rota | Resposta esperada |
+| Método | Rota | Uso |
 | --- | --- | --- |
-| `POST` | `/support-requests` | `201` com a solicitação criada |
-| `GET` | `/support-requests` | `200` com as solicitações da mais recente para a mais antiga |
-| `GET` | `/support-requests/:id` | `200` com a solicitação encontrada |
-| `POST` | `/support-requests/:id/retry` | `200` com o resultado da nova tentativa no mesmo registro |
+| `GET` | `/health` | Consultar o status da API |
+| `GET` | `/users/:userId/orders` | Listar os pedidos do usuário |
+| `POST` | `/support-requests` | Criar uma solicitação e gerar a primeira resposta de entrega |
+| `GET` | `/support-requests` | Listar solicitações, com filtro opcional `replyStatus` |
+| `GET` | `/support-requests/:id` | Consultar a solicitação e seu histórico |
+| `POST` | `/support-requests/:id/messages` | Registrar outra fala e responder se o atendimento automático estiver ativo |
+| `POST` | `/support-requests/:id/draft-reply` | Tentar gerar uma resposta para uma conversa de entrega já classificada |
+| `POST` | `/support-requests/:id/retry` | Repetir uma triagem que ficou `FAILED` |
 
-Exemplo de teste com curl: 
+### Exemplo de conversa com `curl`
 
-```powershell
-'{"message":"Minha blusa chegou rasgada."}' | curl.exe -i http://localhost:3000/support-requests `
-  -H 'Content-Type: application/json' `
-  --data-binary '@-'
-```
+O exemplo usa a Marina, criada pelo seed, e o pedido `PED-1002`, que consta como entregue.
 
-A mensagem é gravada como `PENDING` antes da análise. O `POST` aguarda o resultado e devolve o registro como `ANALYZED`, com categoria, resumo e departamento, ou como `FAILED` se a análise falhar. N
+1. Liste os pedidos e copie o `id` do `PED-1002`.
 
-esse caso, use o `id` retornado para tentar novamente.
+   ```powershell
+   curl.exe http://localhost:3000/users/7fb43c27-bb18-457a-a0a9-518383e96b28/orders
+   ```
 
-```powershell
-curl.exe -i http://localhost:3000/support-requests
-curl.exe -i http://localhost:3000/support-requests/uuid
-curl.exe -i -X POST http://localhost:3000/support-requests/uuid/retry
-```
+2. Substitua `ORDER_ID` pelo ID do pedido. O retorno traz o ID da solicitação e a primeira resposta em `reply`.
 
-O `/retry` aceita solicitações `FAILED` e devolve `409` para outros estados.
+   ```powershell
+   '{"userId":"7fb43c27-bb18-457a-a0a9-518383e96b28","orderId":"ORDER_ID","message":"Meu pedido aparece como entregue, mas eu nunca recebi."}' |
+       curl.exe --json '@-' http://localhost:3000/support-requests
+   ```
+
+3. Leia a primeira resposta e substitua `REQUEST_ID` pelo ID retornado no passo anterior para continuar a conversa.
+
+   ```powershell
+   '{"message":"Falei com a portaria, com os vizinhos e com todo mundo de casa. Nenhuma dessas pessoas recebeu o pacote."}' |
+       curl.exe --json '@-' http://localhost:3000/support-requests/REQUEST_ID/messages
+   ```
+
+4. Se o retorno indicar `NEEDS_REVIEW`, consulte o caso na fila.
+
+   ```powershell
+   curl.exe 'http://localhost:3000/support-requests?replyStatus=NEEDS_REVIEW'
+   ```
+
+Se a **triagem** falhar, a solicitação fica `FAILED` e pode ser reprocessada em `/retry`. Se a **resposta automática** falhar depois da triagem, a fala fica salva e o retorno pode trazer `replyError`, como `REPLY_UNAVAILABLE`. Use `/draft-reply` para tentar gerar a resposta sem reenviar a mensagem.
 
 ## Testes
 
-Os testes de integração enviam mensagens fictícias ao Hono, simulam as respostas do Gemini e conferem a gravação no PostgreSQL. 
-
-Eles usam o banco indicado por `DATABASE_URL` e removem pelo ID os registros que criam quando recebem esse ID da API.
+A última execução da suíte de integração passou com **44 testes**. Ela usa o PostgreSQL indicado por `DATABASE_URL`, simula o Gemini e verifica a primeira resposta automática, a preservação da solicitação em caso de falha e o encaminhamento pelo limite de respostas. Use um banco de desenvolvimento com as migrations aplicadas.
 
 ```powershell
 bun test tests/integration/support-requests.test.ts
 ```
 
-A avaliação com o Gemini real envia uma mensagem por categoria, em sete chamadas. Ela compara a categoria e o departamento e imprime os resumos para revisão manual. Essa avaliação roda sem salvar nada no PostgreSQL e só é ativada com `RUN_GEMINI_EVAL=1` no .env.
+O script de entrega usa o Gemini real para avaliar quatro cenários que cobrem consulta de status, primeiro relato de não recebimento, investigação e pedido de atendimento humano.
+
+```powershell
+bun run scripts/test-delivery-reply.ts
+```
+
+A avaliação de triagem usa o Gemini real com uma mensagem de cada categoria. Ela compara categoria e departamento e imprime os resumos para revisão. É necessário o valor RUN_GEMINI_EVAL = '1' no .env
+
+```powershell
+bun test tests/evaluation/triage.test.ts
+```
