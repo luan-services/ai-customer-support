@@ -10,6 +10,19 @@ import { prisma } from '../../lib/prisma'
 import type { createSupportRequestSchema } from './support-requests.schemas'
 import { departmentByCategory } from './support-requests.triage'
 
+type SupportReplyToSave = {
+	reply: string
+	replyStatus: SupportReplyStatus
+	reviewReason: string | null
+}
+
+const maxAutomaticDeliveryReplies = 4
+const turnLimitReply: SupportReplyToSave = {
+	reply: 'Sinalizei sua solicitação para revisão humana para que o atendimento possa continuar.',
+	replyStatus: SupportReplyStatus.NEEDS_REVIEW,
+	reviewReason: 'TURN_LIMIT_REACHED',
+}
+
 const analyzeAndUpdateSupportRequest = async (id: string, message: string) => {
 	const where = { id }
 	let analysis: Awaited<ReturnType<typeof analyzeSupportMessage>>
@@ -46,6 +59,7 @@ export const createSupportRequest = async ({ userId, orderId, message }: z.infer
 		return null
 	}
 
+	// Guarda a primeira fala antes da triagem para preservá-la se o Gemini falhar.
 	const supportRequest = await prisma.supportRequest.create({
 		data: {
 			message,
@@ -59,19 +73,20 @@ export const createSupportRequest = async ({ userId, orderId, message }: z.infer
 
 const analyzeAndDraftSupportRequest = async (id: string, message: string) => {
 	const analyzedRequest = await analyzeAndUpdateSupportRequest(id, message)
+
 	if (analyzedRequest.category !== TriageCategory.DELIVERY) {
 		return analyzedRequest
 	}
 
-	const result = await draftSupportRequestReply(analyzedRequest.id)
-	if (result.kind === 'saved' || result.kind === 'alreadyInReview') {
-		return result.supportRequest
+	const draftResult = await draftSupportRequestReply(analyzedRequest.id)
+	if (draftResult.kind === 'saved' || draftResult.kind === 'alreadyInReview') {
+		return draftResult.supportRequest
 	}
 
-	if (result.kind === 'replyUnavailable' || result.kind === 'generationFailed') {
+	if (draftResult.kind === 'replyUnavailable' || draftResult.kind === 'generationFailed') {
 		return {
 			...analyzedRequest,
-			replyError: result.kind === 'replyUnavailable' ? 'REPLY_UNAVAILABLE' : 'GENERATION_FAILED',
+			replyError: draftResult.kind === 'replyUnavailable' ? 'REPLY_UNAVAILABLE' : 'GENERATION_FAILED',
 		}
 	}
 
@@ -105,6 +120,7 @@ export const createSupportMessage = async (supportRequestId: string, message: st
 	const customerMessage = await prisma.supportMessage.create({
 		data: { supportRequestId, role: SupportMessageRole.CUSTOMER, message },
 	})
+
 	const result = await draftSupportRequestReply(supportRequestId, customerMessage.id)
 
 	if (result.kind === 'replyUnavailable' || result.kind === 'generationFailed') {
@@ -140,7 +156,8 @@ export const draftSupportRequestReply = async (id: string, customerMessageId?: s
 	}
 
 	const { message, status, category, order, messages } = supportRequest
-	if (status !== SupportRequestStatus.ANALYZED || category !== TriageCategory.DELIVERY || !order) {
+	const canDraftReply = status === SupportRequestStatus.ANALYZED && category === TriageCategory.DELIVERY
+	if (!canDraftReply || !order) {
 		return { kind: 'ineligible' } as const
 	}
 
@@ -150,12 +167,22 @@ export const draftSupportRequestReply = async (id: string, customerMessageId?: s
 		return { kind: 'alreadyInReview', supportRequest: saved, reply, replyStatus, reviewReason } as const
 	}
 
-	const lastIndex = messages.findIndex(({ id }) => id === customerMessageId)
-	const conversation = lastIndex < 0 ? messages : messages.slice(0, lastIndex + 1)
-	const [firstMessage] = conversation
-	const history = firstMessage?.role === SupportMessageRole.CUSTOMER && firstMessage.message === message
-		? conversation
-		: [{ role: SupportMessageRole.CUSTOMER, message }, ...conversation]
+	const automaticReplyCount = messages.filter(({ role }) => role === SupportMessageRole.ASSISTANT).length
+	if (automaticReplyCount >= maxAutomaticDeliveryReplies) {
+		return saveAssistantReply(id, turnLimitReply)
+	}
+
+	// Responde ao turno que disparou a chamada, mesmo se já houver uma fala mais recente.
+	const customerMessageIndex = messages.findIndex(({ id }) => id === customerMessageId)
+	const messagesForReply = customerMessageIndex < 0 ? messages : messages.slice(0, customerMessageIndex + 1)
+	const [firstMessage] = messagesForReply
+	const historyIncludesOpeningMessage = firstMessage?.role === SupportMessageRole.CUSTOMER
+		&& firstMessage.message === message
+
+	// Solicitações antigas podem ter a primeira fala apenas no campo message.
+	const history = historyIncludesOpeningMessage
+		? messagesForReply
+		: [{ role: SupportMessageRole.CUSTOMER, message }, ...messagesForReply]
 
 	let decision: Awaited<ReturnType<typeof decideDeliveryReply>>
 	try {
@@ -176,25 +203,29 @@ export const draftSupportRequestReply = async (id: string, customerMessageId?: s
 	}
 
 	const needsReview = decision.action === 'HANDOFF'
-	const replyData = {
+	return saveAssistantReply(id, {
 		reply: needsReview
 			? 'Sinalizei sua solicitação para revisão humana.'
 			: decision.reply,
 		replyStatus: needsReview ? SupportReplyStatus.NEEDS_REVIEW : SupportReplyStatus.DRAFTED,
 		reviewReason: needsReview ? decision.reason : null,
-	}
+	})
+}
 
+const saveAssistantReply = (supportRequestId: string, replyData: SupportReplyToSave) => {
+	// O status e a fala do assistente precisam ser gravados juntos.
 	return prisma.$transaction(async (tx) => {
-		const [saved] = await tx.supportRequest.updateManyAndReturn({
+		// Outra resposta pode ter encaminhado o caso enquanto o Gemini respondia.
+		let [saved] = await tx.supportRequest.updateManyAndReturn({
 			where: {
-				id,
+				id: supportRequestId,
 				OR: [{ replyStatus: null }, { replyStatus: SupportReplyStatus.DRAFTED }],
 			},
 			data: replyData,
 		})
 
 		if (!saved) {
-			const existing = await tx.supportRequest.findUnique({ where: { id } })
+			const existing = await tx.supportRequest.findUnique({ where: { id: supportRequestId } })
 			if (!existing) {
 				return { kind: 'notFound' } as const
 			}
@@ -202,11 +233,23 @@ export const draftSupportRequestReply = async (id: string, customerMessageId?: s
 			return { kind: 'alreadyInReview', supportRequest: existing, reply, replyStatus, reviewReason } as const
 		}
 
+		let finalReplyData = replyData
+		if (replyData.replyStatus === SupportReplyStatus.DRAFTED) {
+			// Reconfere o limite com a solicitação bloqueada pela atualização acima.
+			const automaticReplyCount = await tx.supportMessage.count({
+				where: { supportRequestId, role: SupportMessageRole.ASSISTANT },
+			})
+			if (automaticReplyCount >= maxAutomaticDeliveryReplies) {
+				finalReplyData = turnLimitReply
+				saved = await tx.supportRequest.update({ where: { id: supportRequestId }, data: finalReplyData })
+			}
+		}
+
 		const assistantMessage = await tx.supportMessage.create({
-			data: { supportRequestId: id, role: SupportMessageRole.ASSISTANT, message: replyData.reply },
+			data: { supportRequestId, role: SupportMessageRole.ASSISTANT, message: finalReplyData.reply },
 		})
 
-		return { kind: 'saved', supportRequest: saved, assistantMessage, ...replyData } as const
+		return { kind: 'saved', supportRequest: saved, assistantMessage, ...finalReplyData } as const
 	})
 }
 

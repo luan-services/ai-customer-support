@@ -61,6 +61,60 @@ test('rejects an order belonging to another user before saving or analyzing the 
 	}
 })
 
+test('queues delivery for human review after four automatic replies', async () => {
+	const message = 'Onde está meu pedido?'
+	const reply = 'Seu pedido está em preparação.'
+	const supportRequest = await prisma.supportRequest.create({
+		data: {
+			orderId,
+			message,
+			status: 'ANALYZED',
+			category: 'DELIVERY',
+			reply,
+			replyStatus: 'DRAFTED',
+			messages: { create: [
+				{ role: 'CUSTOMER', message },
+				...Array.from({ length: 3 }, () => ({ role: 'ASSISTANT' as const, message: reply })),
+			] },
+		},
+	})
+	const geminiFetch = spyOn(globalThis, 'fetch')
+		.mockRejectedValue(new Error('Unexpected Gemini request'))
+		.mockResolvedValueOnce(Response.json({
+			candidates: [{
+				finishReason: 'STOP',
+				content: { parts: [{ text: JSON.stringify({ action: 'REPLY', reason: 'NONE', reply }) }] },
+			}],
+		}))
+	const sendMessage = (message: string) => app.request(`/support-requests/${supportRequest.id}/messages`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ message }),
+	})
+
+	try {
+		const fourthReply = await sendMessage('Tem alguma atualização?')
+		expect(fourthReply.status).toBe(201)
+		expect(await fourthReply.json()).toMatchObject({ replyStatus: 'DRAFTED', reply: { message: reply } })
+
+		const nextMessage = 'Ainda preciso de ajuda com a entrega.'
+		const handoff = await sendMessage(nextMessage)
+		expect(handoff.status).toBe(201)
+		expect(await handoff.json()).toMatchObject({
+			message: { message: nextMessage },
+			replyStatus: 'NEEDS_REVIEW',
+			reply: { role: 'ASSISTANT', message: expect.stringContaining('revisão humana') },
+		})
+		expect(await prisma.supportRequest.findUnique({ where: { id: supportRequest.id } })).toMatchObject({
+			replyStatus: 'NEEDS_REVIEW',
+			reviewReason: 'TURN_LIMIT_REACHED',
+		})
+		expect(geminiFetch).toHaveBeenCalledTimes(1)
+	} finally {
+		geminiFetch.mockRestore()
+	}
+})
+
 const cases = fixture.groups.flatMap(({ expectedCategory, expectedDepartment, cases }) =>
 	cases.map((entry) => ({ ...entry, expectedCategory, expectedDepartment })),
 )
