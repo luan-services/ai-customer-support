@@ -23,6 +23,11 @@ enum SupportReplyStatus {
 	NEEDS_REVIEW
 }
 
+enum SupportMessageRole {
+	CUSTOMER
+	ASSISTANT
+}
+
 enum TriageCategory {
 	DELIVERY
 	EXCHANGE_OR_RETURN
@@ -79,6 +84,18 @@ model SupportRequest {
 	updatedAt    DateTime             @updatedAt
 	orderId      String?
 	order        Order?               @relation(fields: [orderId], references: [id])
+	messages     SupportMessage[]
 
 	@@index([orderId])
+}
+
+model SupportMessage {
+	id               String             @id @default(uuid())
+	role             SupportMessageRole
+	message          String
+	createdAt        DateTime           @default(now())
+	supportRequestId String
+	supportRequest   SupportRequest     @relation(fields: [supportRequestId], references: [id], onDelete: Cascade)
+
+	@@index([supportRequestId, createdAt, id])
 }

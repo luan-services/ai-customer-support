@@ -1,7 +1,13 @@
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
-import { createSupportRequestSchema, supportRequestParamsSchema } from './support-requests.schemas'
 import {
+	createSupportMessageSchema,
+	createSupportRequestSchema,
+	listSupportRequestsQuerySchema,
+	supportRequestParamsSchema,
+} from './support-requests.schemas'
+import {
+	createSupportMessage,
 	createSupportRequest,
 	draftSupportRequestReply,
 	getSupportRequestById,
@@ -39,7 +45,16 @@ supportRequestsRouter.post('/', async (c) => {
 })
 
 supportRequestsRouter.get('/', async (c) => {
-	const supportRequests = await listSupportRequests()
+	const query = listSupportRequestsQuerySchema.safeParse(c.req.query())
+
+	if (!query.success) {
+		throw new HTTPException(400, {
+			message: 'Invalid query parameters',
+			cause: query.error,
+		})
+	}
+
+	const supportRequests = await listSupportRequests(query.data.replyStatus)
 
 	return c.json(supportRequests, 200)
 })
@@ -63,6 +78,37 @@ supportRequestsRouter.get('/:id', async (c) => {
 	return c.json(supportRequest, 200)
 })
 
+supportRequestsRouter.post('/:id/messages', async (c) => {
+	const params = supportRequestParamsSchema.safeParse(c.req.param())
+
+	if (!params.success) {
+		throw new HTTPException(400, {
+			message: 'ID must be a valid UUID',
+			cause: params.error,
+		})
+	}
+
+	const body: unknown = await c.req.json().catch(() => {
+		throw new HTTPException(400, { message: 'Invalid JSON' })
+	})
+	const result = createSupportMessageSchema.safeParse(body)
+
+	if (!result.success) {
+		throw new HTTPException(400, {
+			message: 'Message must be a non-empty string',
+			cause: result.error,
+		})
+	}
+
+	const message = await createSupportMessage(params.data.id.toLowerCase(), result.data.message)
+
+	if (!message) {
+		throw new HTTPException(404, { message: 'Support request not found' })
+	}
+
+	return c.json(message, 201)
+})
+
 supportRequestsRouter.post('/:id/draft-reply', async (c) => {
 	const params = supportRequestParamsSchema.safeParse(c.req.param())
 
@@ -83,15 +129,15 @@ supportRequestsRouter.post('/:id/draft-reply', async (c) => {
 		throw new HTTPException(409, { message: 'A draft requires an analyzed delivery request with a linked order' })
 	}
 
-	if (result.kind === 'needsReview') {
+	if (result.reviewReason !== null) {
 		return c.json({
-			status: 'NEEDS_REVIEW',
-			reason: 'ORDER_MARKED_DELIVERED',
-			reply: 'Seu pedido consta como entregue. Se você não recebeu a encomenda, precisamos verificar o que aconteceu com a entrega.',
+			status: result.replyStatus,
+			reason: result.reviewReason,
+			reply: result.reply,
 		}, 200)
 	}
 
-	return c.json({ status: 'DRAFTED', reply: result.reply }, 200)
+	return c.json({ status: result.replyStatus, reply: result.reply }, 200)
 })
 
 supportRequestsRouter.post('/:id/retry', async (c) => {
