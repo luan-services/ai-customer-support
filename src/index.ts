@@ -24,4 +24,9 @@ try {
 
 console.log('PostgreSQL connection verified')
 
-export default app
+export { app }
+
+export default {
+  fetch: app.fetch,
+  idleTimeout: 70,
+}

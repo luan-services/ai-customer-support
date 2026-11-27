@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, spyOn, test } from 'bun:test'
 import { z } from 'zod'
-import app from '../../src/index'
+import { app } from '../../src/index'
 import { prisma } from '../../src/lib/prisma'
 import fixture from '../fixtures/triage-cases.json'
 
@@ -77,10 +77,23 @@ for (const entry of cases) {
 		const geminiFetch = spyOn(globalThis, 'fetch')
 			.mockRejectedValue(new Error('Unexpected fetch during integration test'))
 		const shouldRetry = entry.id === 'damaged-product-1'
+		const isDelivery = entry.expectedCategory === 'DELIVERY'
+		const replyUnavailable = entry.id === 'delivery-1'
+		const reply = 'Seu pedido está em preparação.'
 		if (shouldRetry) {
 			geminiFetch.mockResolvedValueOnce(new Response(null, { status: 503 }))
 		}
 		geminiFetch.mockResolvedValueOnce(geminiResponse)
+		if (isDelivery) {
+			geminiFetch.mockResolvedValueOnce(replyUnavailable
+				? new Response(null, { status: 503 })
+				: Response.json({
+					candidates: [{
+						finishReason: 'STOP',
+						content: { parts: [{ text: JSON.stringify({ action: 'REPLY', reason: 'NONE', reply }) }] },
+					}],
+				}))
+		}
 
 		try {
 			const created = await app.request('/support-requests', {
@@ -109,11 +122,22 @@ for (const entry of cases) {
 				message: entry.message,
 				status: 'ANALYZED',
 				department: entry.expectedDepartment,
+				reply: isDelivery && !replyUnavailable ? reply : null,
+				replyStatus: isDelivery && !replyUnavailable ? 'DRAFTED' : null,
 				...analysis,
 			}
 			expect(result).toMatchObject(expected)
 			expect(await prisma.supportRequest.findUnique({ where: { id: requestId } })).toMatchObject(expected)
-			expect(geminiFetch).toHaveBeenCalledTimes(shouldRetry ? 2 : 1)
+			if (replyUnavailable) {
+				expect(createdBody).toMatchObject({ replyError: 'REPLY_UNAVAILABLE' })
+			}
+			if (isDelivery && !replyUnavailable) {
+				const messages = await prisma.supportMessage.findMany({ where: { supportRequestId: requestId } })
+				expect(messages).toHaveLength(2)
+				expect(messages.map(({ role, message }) => ({ role, message })))
+					.toContainEqual({ role: 'ASSISTANT', message: reply })
+			}
+			expect(geminiFetch).toHaveBeenCalledTimes(shouldRetry || isDelivery ? 2 : 1)
 		} finally {
 			geminiFetch.mockRestore()
 		}

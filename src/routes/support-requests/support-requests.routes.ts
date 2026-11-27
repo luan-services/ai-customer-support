@@ -100,13 +100,13 @@ supportRequestsRouter.post('/:id/messages', async (c) => {
 		})
 	}
 
-	const message = await createSupportMessage(params.data.id.toLowerCase(), result.data.message)
+	const conversationTurn = await createSupportMessage(params.data.id.toLowerCase(), result.data.message)
 
-	if (!message) {
+	if (!conversationTurn) {
 		throw new HTTPException(404, { message: 'Support request not found' })
 	}
 
-	return c.json(message, 201)
+	return c.json(conversationTurn, 201)
 })
 
 supportRequestsRouter.post('/:id/draft-reply', async (c) => {
@@ -127,6 +127,18 @@ supportRequestsRouter.post('/:id/draft-reply', async (c) => {
 
 	if (result.kind === 'ineligible') {
 		throw new HTTPException(409, { message: 'A draft requires an analyzed delivery request with a linked order' })
+	}
+
+	if (result.kind === 'generationFailed') {
+		throw result.error
+	}
+
+	if (result.kind === 'replyUnavailable') {
+		return c.json({
+			success: false,
+			code: 'REPLY_UNAVAILABLE',
+			message: 'A resposta automática está temporariamente indisponível. Tente novamente em instantes.',
+		}, 503)
 	}
 
 	if (result.reviewReason !== null) {
